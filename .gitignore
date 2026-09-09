@@ -1,14 +1,15 @@
 # Environment & Secrets
 .env
-.env
+backend/.env
 
-
-Lib/
-Scripts/
 # Dependencies & Virtual Env
 include/
+venv/
+backend/venv/
+Lib/
+Scripts/
+
 # Python Cache
-__pycache__/
 __pycache__/
 *.pyc
 
