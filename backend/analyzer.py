@@ -1,17 +1,13 @@
-def analyzer_answer(answer: str):
-    claims = []
+"""Assess interview answers for evidence via the Gemini LLM."""
 
-    if 'years' in answer.lower():
-        claims.append({
-            'claim': 'Applicant claims prior experience in the field',
-            'evidence': None,
-            'evidence_strength': 'unsupported'
-        })
+from ai import evidence_assessment
 
-    if 'built' in answer.lower() or 'developed' in answer.lower():
-        claims.append({
-            'claim': 'Applicant claims to have built or developed something',
-            'evidence': None,
-            'evidence_strength': 'unsupported'
-        })
-    return claims
+
+def analyze_answers(answers: list[str]) -> dict[str, bool]:
+    """Return five boolean evidence flags for the given answers.
+
+    Keys: specific_example, personal_action, outcome, reflection, plan.
+    Propagates LLMError so callers can surface the failure to the client.
+    """
+    flags, _ = evidence_assessment(answers)
+    return flags

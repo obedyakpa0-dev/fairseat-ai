@@ -1,14 +1,25 @@
 from pydantic import BaseModel
-from datetime import datetime
+
 
 class Applicant(BaseModel):
+    """Applicant registration data.
+
+    Age, date of birth, residence, and any other protected characteristics
+    are intentionally absent — they must never influence scoring or placement.
+    """
+
     name: str
-    age: int
-    date_of_birth: datetime
-    residence: str
     skill_of_interest: str
     motivation: str
     goal_after_training: str
+
+
+class ChatMessage(BaseModel):
+    """A single turn in the interview chat transcript."""
+
+    role: str   # "user" | "assistant"
+    content: str
+
 
 class InterviewAnswer(BaseModel):
     applicant_id: str
@@ -17,9 +28,3 @@ class InterviewAnswer(BaseModel):
 
 class SelectionRequest(BaseModel):
     seats: int = 5
-
-
-class claim(BaseModel):
-    claim: str
-    evidence: str | None = None
-    evidence_strength: str = 'unsupported'
