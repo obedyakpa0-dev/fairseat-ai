@@ -1,4 +1,0 @@
-fastapi
-uvicorn
-google-genai>=2.22.0
-python-dotenv
