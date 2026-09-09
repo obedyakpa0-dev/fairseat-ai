@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
-import os
 import json
+import os
 import re
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 try:
     from google import genai
