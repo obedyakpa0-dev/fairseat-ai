@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Fairseat AI — Evidence-led placements</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="noise"></div>
+    <header class="topbar">
+      <a class="brand" href="#"><span class="brand-mark">f</span><span>fairseat</span><sup>AI</sup></a>
+      <div class="status"><span></span>Fair review system</div>
+    </header>
+    <main>
+      <section class="hero">
+        <div><p class="eyebrow">SKILLS OPPORTUNITY • 05 SEATS</p><h1>Talent is everywhere.<br /><em>Fair access</em> should be too.</h1></div>
+        <p class="hero-copy">A structured interview that asks every candidate the same foundations, probes for evidence, and makes every placement explainable.</p>
+      </section>
+      <nav class="tabs" aria-label="Application stages">
+        <button class="tab active" data-view="apply"><span>01</span> Apply</button>
+        <button class="tab" data-view="interview"><span>02</span> Interview</button>
+        <button class="tab" data-view="decisions"><span>03</span> Decisions</button>
+      </nav>
+
+      <section id="apply" class="view active">
+        <div class="section-head"><div><p class="eyebrow">START HERE</p><h2>Tell us about your goal.</h2></div><p>Everyone receives the same core questions. Personal details are kept out of the selection score.</p></div>
+        <form id="application-form" class="form-card">
+          <label>Full name<input name="name" required placeholder="e.g. Ada Okafor" /></label>
+          <label>Age<input name="age" required type="number" min="16" max="100" placeholder="18" /></label>
+          <label>Town or city<input name="residence" required placeholder="e.g. Lagos" /></label>
+          <label>Skill you want to learn<select name="skill"><option>Coding</option><option>Data analysis</option><option>Tailoring</option><option>Digital marketing</option><option>Other</option></select></label>
+          <label class="wide">Why does this opportunity matter to you now?<textarea name="motivation" required minlength="10" placeholder="Share what you want to change or build…"></textarea></label>
+          <label class="wide">What would you like to do after training?<textarea name="goal" required minlength="10" placeholder="Describe a practical next step…"></textarea></label>
+          <div class="form-footer"><p><b>Privacy note:</b> age and residence are collected for administration only; neither is used to rank applicants.</p><button class="button" type="submit">Save & start interview <span>→</span></button></div>
+        </form>
+      </section>
+
+      <section id="interview" class="view">
+        <div class="section-head"><div><p class="eyebrow">STRUCTURED INTERVIEW</p><h2>Show us the evidence.</h2></div><p>Your answers stay with your application. We’ll ask two follow-ups so everyone has a fair chance to add context.</p></div>
+        <div id="candidate-picker" class="candidate-picker"></div>
+        <div id="interview-empty" class="empty"><span>✦</span><h3>Select an application to begin</h3><p>Save an application first, then continue with its interview.</p></div>
+        <article id="interview-card" class="interview-card hidden">
+          <div class="chat-top"><div class="interviewer-avatar">f</div><div><strong>Fairseat interview</strong><small id="model-status"><i></i> Guided & evidence-led</small></div><span id="question-count">01 / 06</span></div>
+          <div id="chat-thread" class="chat-thread" aria-live="polite"></div>
+          <form id="answer-form" class="chat-composer"><textarea id="answer" minlength="12" required placeholder="Write your answer…"></textarea><div><span class="hint">Be specific: what happened, what you did, and what changed.</span><button class="button" type="submit">Send <span>↑</span></button></div></form>
+        </article>
+        <article id="complete-card" class="complete-card hidden"><span class="check">✓</span><div><p class="eyebrow">INTERVIEW COMPLETE</p><h3>Thank you — your evidence is ready for fair review.</h3><p>Your answers will be assessed alongside other completed interviews, not by who applied first.</p></div><button class="button ghost" data-go="decisions">See decisions <span>→</span></button></article>
+      </section>
+
+      <section id="decisions" class="view">
+        <div class="section-head"><div><p class="eyebrow">AUDITABLE DECISIONS</p><h2>Five seats. Two job guarantees.</h2></div><p>Only completed interviews are reviewed. Scores use evidence—not age, address, connections, or application time.</p></div>
+        <div class="review-controls"><button id="review-button" class="button">Run fair review <span>→</span></button><button id="demo-button" class="text-button">Load completed demo interviews</button></div>
+        <div id="review-empty" class="empty small"><span>⌁</span><h3>No completed interviews yet</h3><p>Complete at least one interview, or load the demo to preview a five-seat review.</p></div>
+        <div id="review-result" class="hidden"><div class="review-note"><span>✦</span><p id="review-note"></p></div><div class="decision-grid decision-grid-three"><section class="guarantee-panel"><div class="decision-title"><span class="number">02</span><div><p class="eyebrow">GUARANTEED JOB</p><h3>Job placements</h3></div></div><div id="job-guarantees" class="decision-list"></div></section><section><div class="decision-title"><span class="number">03</span><div><p class="eyebrow">TRAINING ONLY</p><h3>Programme places</h3></div></div><div id="training-placements" class="decision-list"></div></section><section><div class="decision-title"><span class="number muted">—</span><div><p class="eyebrow">KEEP IN VIEW</p><h3>Waitlist</h3></div></div><div id="waitlist" class="decision-list"></div></section></div></div>
+      </section>
+    </main>
+    <div id="toast" role="status"></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
