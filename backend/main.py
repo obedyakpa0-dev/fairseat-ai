@@ -16,6 +16,7 @@ try:
     from .followup import generate_follow_up_questions
     from .analyzer import analyze_answers
     from .selection import rank_applicants
+    from .scenario import build_scenario_applicants, scenario_rank
     from .ai import acknowledgement, evidence_summary, LLMError, enabled as llm_enabled
 except ImportError:  # pragma: no cover - supports direct script execution too.
     from models import Applicant, InterviewAnswer, SelectionRequest
@@ -23,6 +24,7 @@ except ImportError:  # pragma: no cover - supports direct script execution too.
     from followup import generate_follow_up_questions
     from analyzer import analyze_answers
     from selection import rank_applicants
+    from scenario import build_scenario_applicants, scenario_rank
     from ai import acknowledgement, evidence_summary, LLMError, enabled as llm_enabled
 
 app = FastAPI(
@@ -167,7 +169,11 @@ def legacy_submit_answer(data: InterviewAnswer):
 
 @app.post("/api/selection")
 def selection(data: SelectionRequest):
-    ranked = rank_applicants(applicants, interviews, data.seats)
+    ranked = (
+        scenario_rank(applicants, interviews, len(applicants))
+        if any("evidence_summary" in person for person in applicants.values())
+        else rank_applicants(applicants, interviews, data.seats)
+    )
     completed = [entry for entry in ranked if entry["completed_interview"]]
     placements = []
     waitlist = []
@@ -213,27 +219,18 @@ def legacy_selection(data: SelectionRequest):
 
 @app.post("/api/demo")
 def demo_seed():
-    sample = [
-        {"name": "Amina", "skill": "Coding", "motivation": "I want to learn teamwork and build digital solutions.", "goal": "I want to become a junior software developer.", "age": 24, "residence": "Kano"},
-        {"name": "Kofi", "skill": "Data analysis", "motivation": "I need to interpret local business data to help my community.", "goal": "I want to become a data analyst.", "age": 27, "residence": "Accra"},
-        {"name": "Marta", "skill": "Tailoring", "motivation": "I want a stable income and practical design skills.", "goal": "I want to grow a small tailoring business.", "age": 21, "residence": "Harare"},
-    ]
+    sample = build_scenario_applicants()
     for person in sample:
         applicants[person["name"]] = person
         interviews.setdefault(person["name"], create_interview())
-        interviews[person["name"]]["answers"] = [
-            "I created a small project to track sales for my local shop and used feedback to improve it.",
-            "I learned how to structure a problem and test different solutions before choosing one.",
-            "I organised a community workshop and helped others apply the same method to their own challenges.",
-            "I want to use the training to build more practical products and improve my confidence working with teams.",
-        ]
+        interviews[person["name"]]["answers"] = [person["motivation"], person["goal"]]
         interviews[person["name"]]["complete"] = True
         interviews[person["name"]]["transcript"] = [{"role": "user", "content": answer} for answer in interviews[person["name"]]["answers"]]
         interviews[person["name"]]["evidence_flags"] = {
-            "specific_example": True,
-            "personal_action": True,
-            "outcome": True,
-            "reflection": True,
-            "plan": True,
+            "specific_example": not person.get("vague_experience") and not person.get("connection"),
+            "personal_action": not person.get("vague_experience") and not person.get("connection"),
+            "outcome": not person.get("vague_experience") and not person.get("connection"),
+            "reflection": not person.get("connection"),
+            "plan": bool(person.get("goal")),
         }
-    return {"message": "Demo interviews loaded", "count": len(sample)}
+    return {"message": "Challenge sample interviews loaded", "count": len(sample)}
