@@ -39,12 +39,23 @@ It does not score age, residence, relationship to local leaders, or application 
 
 ## Run locally
 
+The backend and frontend are separate applications. Start them in two terminals:
+
 ```powershell
 cd backend
 .\venv\Scripts\python.exe -m uvicorn main:app --reload
 ```
 
-Open `http://127.0.0.1:8000` and use the app to add applicants, run interviews, and review placements.
+In a second terminal, serve the frontend:
+
+```powershell
+cd frontend
+python -m http.server 3000
+```
+
+Open `http://127.0.0.1:3000` and use the app to add applicants, run interviews, and review placements. The API is available at `http://127.0.0.1:8000`; set `window.FAIRSEAT_API_URL` in `frontend/app.js` when the backend runs elsewhere.
+
+The backend does not serve frontend files. Its `FRONTEND_ORIGIN` environment variable accepts a comma-separated list of allowed browser origins and defaults to the local port-3000 origins.
 
 ## Enable AI follow-ups and evidence review
 

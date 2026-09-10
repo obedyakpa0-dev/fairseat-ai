@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
-load_dotenv(Path(__file__).resolve().with_name(".env"))
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 try:
     from .models import Applicant, InterviewAnswer, SelectionRequest
@@ -31,17 +30,20 @@ app = FastAPI(
     description="An evidence-led placement prototype. Age, residence, and protected characteristics are never scored.",
     version="2.0.0",
 )
-
-_static = Path(__file__).resolve().parent / "static"
-if _static.is_dir():
-    app.mount("/static", StaticFiles(directory=str(_static)), name="static")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("FRONTEND_ORIGIN", "http://127.0.0.1:3000,http://localhost:3000").split(","),
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 applicants: dict[str, dict] = {}
 
 
 @app.get("/")
 def home():
-    return {"message": "Fairseat AI is running"}
+    return {"message": "Fairseat AI API is running"}
 
 
 @app.get("/api/applicants")
