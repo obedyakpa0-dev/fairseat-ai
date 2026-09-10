@@ -19,7 +19,7 @@ except ImportError:  # The app remains runnable before the SDK is installed.
     genai = None
 
 PROVIDER = os.getenv("LLM_PROVIDER", "groq").lower()
-MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile") if PROVIDER == "groq" else os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b") if PROVIDER == "groq" else os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 _gemini_client = None
 _llm_backoff_until = 0.0
 
@@ -67,6 +67,7 @@ def _generate(instructions: str, contents: str, json_output: bool = False) -> st
                 headers={
                     "Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}",
                     "Content-Type": "application/json",
+                    "User-Agent": "Fairseat-AI/1.0",
                 },
                 method="POST",
             )
