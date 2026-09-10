@@ -57,9 +57,28 @@ Open `http://127.0.0.1:3000` and use the app to add applicants, run interviews, 
 
 The backend does not serve frontend files. Its `FRONTEND_ORIGIN` environment variable accepts a comma-separated list of allowed browser origins and defaults to the local port-3000 origins.
 
+## Deploy with Docker
+
+1. Create `backend/.env` from `backend/.env.example` and add `GEMINI_API_KEY`.
+2. Build and start both services:
+
+```powershell
+docker compose up --build -d
+```
+
+3. Open `http://localhost:3000`. The API health response is at `http://localhost:8000/`.
+
+For a hosted deployment, build the frontend image with the public API URL and configure the backend origin:
+
+```powershell
+docker build --build-arg API_URL=https://api.example.com -f frontend/Dockerfile .
+```
+
+Set `FRONTEND_ORIGIN=https://app.example.com` on the backend service. Keep `GEMINI_API_KEY` and any other secrets in the host or deployment platform's secret manager; do not place them in an image or commit them.
+
 ## Enable AI follow-ups and evidence review
 
-The application uses Google Gemini (`gemini-2.5-flash`) via the `google-genai` SDK to:
+The application uses Google Gemini (`gemini-3.6-flash`) via the `google-genai` SDK to:
 
 - acknowledge each answer in conversation
 - generate two neutral evidence-seeking follow-up questions after the foundation interview

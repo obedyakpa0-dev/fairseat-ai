@@ -13,13 +13,12 @@ load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 try:
     from google import genai
-    from google.genai import types
 except ImportError:  # The app remains runnable before the SDK is installed.
     genai = None
-    types = None
 
 
-MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+_gemini_client = None
 
 
 class LLMError(RuntimeError):
@@ -31,9 +30,21 @@ def enabled() -> bool:
 
 
 def _client() -> genai.Client:
+    global _gemini_client
     if not enabled():
         raise LLMError("The interview assistant needs GEMINI_API_KEY. Add it to backend/.env and restart the server.")
-    return genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    if _gemini_client is None:
+        _gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    return _gemini_client
+
+
+def _generate(instructions: str, contents: str) -> str:
+    response = _client().interactions.create(
+        model=MODEL,
+        system_instruction=instructions,
+        input=contents,
+    )
+    return response.output_text or ""
 
 
 def _questions(text: str) -> list[str]:
@@ -56,16 +67,7 @@ age, residence, gender, ethnicity, religion, disability, family status, politica
 Return only a numbered list of two questions, each ending in a question mark."""
     transcript = "\n\n".join(f"Answer {index + 1}: {answer}" for index, answer in enumerate(answers))
     try:
-        client = _client()
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=transcript,
-            config=types.GenerateContentConfig(
-                system_instruction=instructions,
-                max_output_tokens=220,
-            ),
-        )
-        questions = _questions(response.text or "")
+        questions = _questions(_generate(instructions, transcript))
         if len(questions) != 2:
             raise LLMError("The language model returned an invalid follow-up response. Please send the answer again.")
         return questions, True
@@ -82,16 +84,7 @@ latest answer in one concise, respectful sentence (maximum 24 words). Do not ass
 promise a job, make a placement decision, or mention protected personal information."""
     transcript = "\n".join(f"{message['role'].upper()}: {message['content']}" for message in messages[-10:])
     try:
-        client = _client()
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=transcript,
-            config=types.GenerateContentConfig(
-                system_instruction=instructions,
-                max_output_tokens=70,
-            ),
-        )
-        text = " ".join((response.text or "").split())
+        text = " ".join(_generate(instructions, transcript).split())
         if not 5 <= len(text) <= 220:
             raise LLMError("The language model returned an invalid chat response. Please send the answer again.")
         return text, True
@@ -108,16 +101,7 @@ sentence of 35 words or fewer. Do not rank, score, select, reject, promise emplo
 personal traits, or mention age, residence, gender, ethnicity, religion, disability, family,
 politics, or contacts. Focus on specific action, outcome, reflection, and participation plan."""
     try:
-        client = _client()
-        response = client.models.generate_content(
-            model=MODEL,
-            contents="\n\n".join(answers),
-            config=types.GenerateContentConfig(
-                system_instruction=instructions,
-                max_output_tokens=100,
-            ),
-        )
-        text = " ".join((response.text or "").split())
+        text = " ".join(_generate(instructions, "\n\n".join(answers)).split())
         if not 10 <= len(text) <= 320:
             raise LLMError("The language model returned an invalid review summary.")
         return text, True
@@ -135,17 +119,7 @@ Set a key true only when the answers contain explicit evidence for it. Do not in
 age, residence, gender, ethnicity, religion, disability, family, politics, or contacts. Do not score,
 rank, select, reject, or recommend the applicant. Return JSON only."""
     try:
-        client = _client()
-        response = client.models.generate_content(
-            model=MODEL,
-            contents="\n\n".join(answers),
-            config=types.GenerateContentConfig(
-                system_instruction=instructions,
-                response_mime_type="application/json",
-                max_output_tokens=120,
-            ),
-        )
-        assessment = json.loads(response.text or "{}")
+        assessment = json.loads(_generate(instructions, "\n\n".join(answers)))
         keys = {"specific_example", "personal_action", "outcome", "reflection", "plan"}
         if set(assessment) != keys or not all(isinstance(assessment[key], bool) for key in keys):
             raise LLMError("The language model returned an invalid evidence assessment.")
