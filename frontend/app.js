@@ -97,9 +97,11 @@ function showQuestion(data) {
       : "<i></i> Guided & evidence-led";
   $("#question-count").textContent =
     `${String(data.answered + 1).padStart(2, "0")} / ${String(data.total).padStart(2, "0")}`;
-  $("#chat-thread").innerHTML = (data.messages || [])
+  const transcript = (data.messages || [])
     .map((entry) => message(entry.role, entry.content))
     .join("");
+  const question = data.question ? message("assistant", data.question) : "";
+  $("#chat-thread").innerHTML = transcript + question;
   $("#chat-thread").scrollTop = $("#chat-thread").scrollHeight;
   $("#answer").value = "";
   $("#answer").focus();
