@@ -1,6 +1,41 @@
 # Fairseat AI
 
-An evidence-led placement prototype for the supplied skills-training challenge. It interviews every applicant with the same four foundation questions, generates at least two evidence probes, and ranks only completed interviews. Age, residence, application order, and personal connections are never used for scoring.
+This project implements a fair, explainable skills-training placement system for a community scenario with 5 seats and 20+ applicants. It interviews each applicant through a real conversation, asks at least two follow-up questions before forming an opinion, probes vague claims instead of accepting them at face value, and ranks only completed interviews using evidence rather than sympathy, first-come order, personal pressure, or influence.
+
+## The challenge scenario
+
+A community skills-training program has 5 spots left in a solar installation, coding, or tailoring cohort. There are 20+ applicants, but only 2 of the 5 available places can include a guaranteed job placement afterward. The system must decide which applicants receive each seat and explain why.
+
+The challenge includes applicants such as:
+
+- a single mother who needs income now
+- a gifted 17-year-old with strong potential but no immediate need
+- someone rejected twice before and calling this their last chance
+- a retired elder who wants to teach others afterward for free
+- someone claiming prior informal experience without clear evidence
+- a local business owner's relative who was recommended by an influential person
+
+The bot is not allowed to:
+
+- say "everyone deserves a spot"
+- rely on random selection
+- prioritise whoever is most sympathetic or most persuasive
+- use application order, personal connections, or protected attributes as scoring inputs
+- accept vague or unverifiable claims without follow-up probing
+
+## How the app works
+
+The app asks every applicant the same foundation questions, then generates at least two neutral follow-up questions to test evidence, capability, commitment, realism, and learning potential. It keeps the full chat transcript and can revise an earlier lean when new information appears mid-process, such as a new job offer or a material change in circumstances.
+
+It evaluates only evidence-based signals such as:
+
+- specific example
+- personal action
+- outcome
+- reflection
+- plan
+
+It does not score age, residence, relationship to local leaders, or application order. The final ranking is deterministic and explainable.
 
 ## Run locally
 
@@ -9,14 +44,33 @@ cd backend
 .\venv\Scripts\python.exe -m uvicorn main:app --reload
 ```
 
-Open `http://127.0.0.1:8000`. Use **Load completed demo interviews** to see a five-seat decision and individual explanations.
+Open `http://127.0.0.1:8000` and use the app to add applicants, run interviews, and review placements.
 
-## Enable tailored AI follow-ups
+## Enable AI follow-ups and evidence review
 
-The application uses Google Gemini (`gemini-2.5-flash`) via the `google-genai` SDK to run the interview conversation: it acknowledges each answer, writes two neutral evidence-seeking follow-up questions after the shared foundation interview, assesses five job-relevant evidence dimensions, and produces reviewer-facing evidence summaries. The complete chat transcript is returned by the API and remains visible when an applicant revisits the interview. The server converts only those evidence flags into a deterministic score and placement order; the model never directly selects, rejects, or promises employment.
+The application uses Google Gemini (`gemini-2.5-flash`) via the `google-genai` SDK to:
+
+- acknowledge each answer in conversation
+- generate two neutral evidence-seeking follow-up questions after the foundation interview
+- assess five job-relevant evidence dimensions
+- summarise reviewer-facing evidence for completed interviews
+
+It never directly selects, rejects, or promises employment from the model alone. It only converts the evidence flags into a deterministic selection score.
 
 1. Copy `backend/.env.example` to `backend/.env`.
-2. Add `GEMINI_API_KEY` to `.env` (keep this file private and never expose the key in the browser).
+2. Add `GEMINI_API_KEY` to `.env`.
 3. Restart the server.
 
-The LLM is required for applicant messages and reviewer summaries. If the key, model access, or connection is unavailable, the app reports the error and does not silently replace the model with scripted answers.
+If the key, model access, or connection is unavailable, the app reports the error instead of silently substituting scripted answers.
+
+## Fairness and explainability rules
+
+Every placed applicant must be able to be justified individually.
+Each non-selected applicant must have a clear reason for not being chosen, such as:
+
+- insufficient evidence or vague claims
+- weaker practical fit than higher-ranked applicants
+- lower readiness for the training or job outcome
+- connection-based influence not supported by evidence
+
+The system is designed to explain both the selected and unselected cases, so a reviewer can challenge a placement and get a reasoned answer, not a vague or emotional one.
