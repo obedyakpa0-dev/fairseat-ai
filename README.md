@@ -57,6 +57,14 @@ Open `http://127.0.0.1:3000` and use the app to add applicants, run interviews, 
 
 The backend does not serve frontend files. Its `FRONTEND_ORIGIN` environment variable accepts a comma-separated list of allowed browser origins and defaults to the local port-3000 origins.
 
+## Judge Demo
+
+Judges can open the live demo without installing anything:
+
+**[Open Fairseat AI](https://ambiguous-approve-thicken.ngrok-free.dev)**
+
+On the Decisions tab, select **Load challenge sample applicants**, then run the fair review. This temporary public URL is provided through ngrok and is available while the demo tunnel is running.
+
 ## Deploy with Docker
 
 1. Create `backend/.env` from `backend/.env.example` and add the key for your selected provider.
