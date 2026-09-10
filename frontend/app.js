@@ -126,6 +126,21 @@ async function selectApplicant(id) {
   data.complete ? showComplete(data) : showQuestion(data);
 }
 
+async function restartInterview() {
+  try {
+    const data = await api(`/api/interviews/${activeId}/reset`, {
+      method: "POST",
+    });
+    showQuestion(data);
+    toast("Interview restarted. The bot will ask the first question.");
+    await refreshApplicants();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+$("#restart-interview").addEventListener("click", restartInterview);
+
 $("#application-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(event.currentTarget);

@@ -100,6 +100,14 @@ def legacy_start_interview(applicant_id: str):
     return get_interview(applicant_id)
 
 
+@app.post("/api/interviews/{applicant_id}/reset")
+def reset_interview(applicant_id: str):
+    if applicant_id not in applicants:
+        raise HTTPException(status_code=404, detail="Applicant not found.")
+    interviews[applicant_id] = create_interview()
+    return get_interview(applicant_id)
+
+
 @app.post("/api/interviews/{applicant_id}/answers")
 def submit_answer(applicant_id: str, payload: dict):
     interview = interviews.setdefault(applicant_id, create_interview())
