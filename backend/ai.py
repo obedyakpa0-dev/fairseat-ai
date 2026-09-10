@@ -1,4 +1,4 @@
-"""Gemini-assisted interview prompts with a deterministic fairness fallback."""
+"""Provider-configurable interview prompts with a deterministic fallback."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import json
 import os
 import re
 import time
+import urllib.request
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -17,8 +18,8 @@ try:
 except ImportError:  # The app remains runnable before the SDK is installed.
     genai = None
 
-
-MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+PROVIDER = os.getenv("LLM_PROVIDER", "groq").lower()
+MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile") if PROVIDER == "groq" else os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 _gemini_client = None
 _llm_backoff_until = 0.0
 
@@ -28,23 +29,50 @@ class LLMError(RuntimeError):
 
 
 def enabled() -> bool:
+    if PROVIDER == "groq":
+        return bool(os.getenv("GROQ_API_KEY"))
     return bool(genai and os.getenv("GEMINI_API_KEY"))
 
 
-def _client() -> genai.Client:
+def _client():
     global _gemini_client
     if not enabled():
-        raise LLMError("The interview assistant needs GEMINI_API_KEY. Add it to backend/.env and restart the server.")
+        key_name = "GROQ_API_KEY" if PROVIDER == "groq" else "GEMINI_API_KEY"
+        raise LLMError(f"The interview assistant needs {key_name}. Add it to backend/.env and restart the server.")
     if _gemini_client is None:
         _gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
     return _gemini_client
 
 
-def _generate(instructions: str, contents: str) -> str:
+def _generate(instructions: str, contents: str, json_output: bool = False) -> str:
     global _llm_backoff_until
     if time.monotonic() < _llm_backoff_until:
-        raise LLMError("Gemini quota is temporarily unavailable; continuing with guided interview mode.")
+        raise LLMError("The language model is temporarily unavailable; continuing with guided interview mode.")
     try:
+        if PROVIDER == "groq":
+            request = {
+                "model": MODEL,
+                "messages": [
+                    {"role": "system", "content": instructions},
+                    {"role": "user", "content": contents},
+                ],
+                "temperature": 0,
+                "max_tokens": 300,
+            }
+            if json_output:
+                request["response_format"] = {"type": "json_object"}
+            request = urllib.request.Request(
+                "https://api.groq.com/openai/v1/chat/completions",
+                data=json.dumps(request).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=8) as response:
+                body = json.loads(response.read().decode("utf-8"))
+            return body["choices"][0]["message"].get("content") or ""
         response = _client().interactions.create(
             model=MODEL,
             system_instruction=instructions,
@@ -141,7 +169,7 @@ Set a key true only when the answers contain explicit evidence for it. Do not in
 age, residence, gender, ethnicity, religion, disability, family, politics, or contacts. Do not score,
 rank, select, reject, or recommend the applicant. Return JSON only."""
     try:
-        assessment = json.loads(_generate(instructions, "\n\n".join(answers)))
+        assessment = json.loads(_generate(instructions, "\n\n".join(answers), json_output=True))
         keys = {"specific_example", "personal_action", "outcome", "reflection", "plan"}
         if set(assessment) != keys or not all(isinstance(assessment[key], bool) for key in keys):
             raise LLMError("The language model returned an invalid evidence assessment.")

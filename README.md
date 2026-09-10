@@ -59,7 +59,7 @@ The backend does not serve frontend files. Its `FRONTEND_ORIGIN` environment var
 
 ## Deploy with Docker
 
-1. Create `backend/.env` from `backend/.env.example` and add `GEMINI_API_KEY`.
+1. Create `backend/.env` from `backend/.env.example` and add the key for your selected provider.
 2. Build and start both services:
 
 ```powershell
@@ -74,11 +74,11 @@ For a hosted deployment, build the frontend image with the public API URL and co
 docker build --build-arg API_URL=https://api.example.com -f frontend/Dockerfile .
 ```
 
-Set `FRONTEND_ORIGIN=https://app.example.com` on the backend service. Keep `GEMINI_API_KEY` and any other secrets in the host or deployment platform's secret manager; do not place them in an image or commit them.
+Set `FRONTEND_ORIGIN=https://app.example.com` on the backend service. Keep `GROQ_API_KEY`, `GEMINI_API_KEY`, and any other secrets in the host or deployment platform's secret manager; do not place them in an image or commit them.
 
 ## Enable AI follow-ups and evidence review
 
-The application uses Google Gemini (`gemini-3.6-flash`) via the `google-genai` SDK to:
+The application supports GroqCloud and Google Gemini. Set `LLM_PROVIDER=groq` for GroqCloud (recommended default) or `LLM_PROVIDER=gemini` for Google Gemini:
 
 - acknowledge each answer in conversation
 - generate two neutral evidence-seeking follow-up questions after the foundation interview
@@ -88,10 +88,10 @@ The application uses Google Gemini (`gemini-3.6-flash`) via the `google-genai` S
 It never directly selects, rejects, or promises employment from the model alone. It only converts the evidence flags into a deterministic selection score.
 
 1. Copy `backend/.env.example` to `backend/.env`.
-2. Add `GEMINI_API_KEY` to `.env`.
+2. Add `GROQ_API_KEY` and keep `LLM_PROVIDER=groq`, or add `GEMINI_API_KEY` and set `LLM_PROVIDER=gemini`.
 3. Restart the server.
 
-If the key, model access, or connection is unavailable, the app reports the error instead of silently substituting scripted answers.
+If the key, model access, or connection is unavailable, the app continues with a neutral guided fallback instead of blocking the interview.
 
 ## Fairness and explainability rules
 
