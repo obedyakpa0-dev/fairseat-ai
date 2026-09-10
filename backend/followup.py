@@ -1,6 +1,9 @@
 """Generate tailored follow-up questions via the Gemini LLM."""
 
-from ai import tailored_followups
+try:
+    from .ai import tailored_followups
+except ImportError:  # pragma: no cover - supports direct script execution.
+    from ai import tailored_followups
 
 FALLBACK_QUESTIONS = [
     "What specific result did your previous experience produce?",
@@ -8,11 +11,19 @@ FALLBACK_QUESTIONS = [
 ]
 
 
-def generate_follow_up_questions(answers: list[str]) -> list[str]:
-    """Return exactly two evidence-seeking follow-up questions.
+def generate_follow_up_questions(claims_or_answers):
+    """Backwards-compatible helper for both claim-based and answer-based inputs."""
+    if not claims_or_answers:
+        return list(FALLBACK_QUESTIONS)
 
-    Calls the LLM; propagates LLMError so the caller can surface it to the
-    client rather than silently replacing the model with scripted answers.
-    """
-    questions, _ = tailored_followups(answers, FALLBACK_QUESTIONS)
+    if isinstance(claims_or_answers[0], dict):
+        items = [
+            str(item.get("claim", ""))
+            for item in claims_or_answers
+            if isinstance(item, dict)
+        ]
+    else:
+        items = [str(item) for item in claims_or_answers]
+
+    questions, _ = tailored_followups(items, FALLBACK_QUESTIONS)
     return questions

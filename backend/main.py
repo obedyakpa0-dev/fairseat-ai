@@ -3,20 +3,28 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 
-from models import Applicant, InterviewAnswer, SelectionRequest
-from interview import create_interview, interviews, next_question, FOUNDATION_QUESTIONS
-from followup import generate_follow_up_questions
-from analyzer import analyze_answers
-from selection import rank_applicants
-from ai import acknowledgement, evidence_summary, LLMError
+try:
+    from .models import Applicant, InterviewAnswer, SelectionRequest
+    from .interview import create_interview, interviews, next_question, FOUNDATION_QUESTIONS, MIN_FOLLOW_UPS
+    from .followup import generate_follow_up_questions
+    from .analyzer import analyze_answers
+    from .selection import rank_applicants
+    from .ai import acknowledgement, evidence_summary, LLMError, enabled as llm_enabled
+except ImportError:  # pragma: no cover - supports direct script execution too.
+    from models import Applicant, InterviewAnswer, SelectionRequest
+    from interview import create_interview, interviews, next_question, FOUNDATION_QUESTIONS, MIN_FOLLOW_UPS
+    from followup import generate_follow_up_questions
+    from analyzer import analyze_answers
+    from selection import rank_applicants
+    from ai import acknowledgement, evidence_summary, LLMError, enabled as llm_enabled
 
 app = FastAPI(
     title="Fairseat AI",
@@ -24,70 +32,92 @@ app = FastAPI(
     version="2.0.0",
 )
 
-# Static frontend
-_static = os.path.join(os.path.dirname(__file__), "static")
-if os.path.isdir(_static):
-    app.mount("/static", StaticFiles(directory=_static), name="static")
+_static = Path(__file__).resolve().parent / "static"
+if _static.is_dir():
+    app.mount("/static", StaticFiles(directory=str(_static)), name="static")
 
-# In-memory applicant registry
-applicants: dict = {}
+applicants: dict[str, dict] = {}
 
-
-# ── health ────────────────────────────────────────────────────────────────────
 
 @app.get("/")
 def home():
     return {"message": "Fairseat AI is running"}
 
 
-# ── applicants ────────────────────────────────────────────────────────────────
+@app.get("/api/applicants")
+def list_applicants():
+    result = []
+    for applicant_id, payload in applicants.items():
+        interview = interviews.get(applicant_id, {})
+        result.append({
+            "id": applicant_id,
+            "name": payload.get("name", applicant_id),
+            "skill": payload.get("skill") or payload.get("skill_of_interest") or "",
+            "interview_complete": bool(interview.get("complete")),
+        })
+    return result
 
-@app.post("/applicant")
-def create_applicant(applicant: Applicant):
-    applicants[applicant.name] = applicant.model_dump()
+
+@app.post("/api/applicants")
+def create_applicant(api_data: Applicant):
+    applicant_id = api_data.name
+    applicants[applicant_id] = api_data.model_dump(exclude_none=True)
     return {
         "message": "Applicant received",
-        "applicant_id": applicant.name,
-        "applicant": applicant,
+        "id": applicant_id,
+        "applicant_id": applicant_id,
+        "applicant": applicants[applicant_id],
     }
 
 
-# ── interviews ────────────────────────────────────────────────────────────────
+@app.post("/applicant")
+def legacy_create_applicant(applicant: Applicant):
+    return create_applicant(applicant)
 
-@app.get("/interviews/{applicant_id}/start")
-def start_interview(applicant_id: str):
-    """Return the current question and full transcript for an applicant.
 
-    Creates a new interview if one does not exist, so applicants can safely
-    reload the page without losing their progress.
-    """
-    if applicant_id not in interviews:
-        interviews[applicant_id] = create_interview()
-    interview = interviews[applicant_id]
+@app.get("/api/interviews/{applicant_id}")
+def get_interview(applicant_id: str):
+    interview = interviews.setdefault(applicant_id, create_interview())
     question = next_question(interview)
     return {
         "applicant_id": applicant_id,
         "question": question,
-        "transcript": interview["transcript"],
         "complete": interview["complete"],
+        "messages": interview.get("transcript", []),
+        "answered": len(interview.get("answers", [])),
+        "total": len(FOUNDATION_QUESTIONS) + MIN_FOLLOW_UPS,
+        "ai_assisted": llm_enabled(),
+        "ai_available": llm_enabled(),
     }
 
 
-@app.post("/interviews/answers")
-def submit_answer(data: InterviewAnswer):
-    """Accept one answer, return an LLM acknowledgement and the next question."""
-    interview = interviews.get(data.applicant_id)
-    if not interview:
-        raise HTTPException(status_code=404, detail="Interview not found. Call /interviews/{id}/start first.")
+@app.get("/interviews/{applicant_id}/start")
+def legacy_start_interview(applicant_id: str):
+    return get_interview(applicant_id)
 
-    if interview["complete"]:
-        return {"message": "Interview already complete", "complete": True}
 
-    # Append the applicant's answer to the transcript
-    interview["transcript"].append({"role": "user", "content": data.answers})
-    interview["answers"].append(data.answers)
+@app.post("/api/interviews/{applicant_id}/answers")
+def submit_answer(applicant_id: str, payload: dict):
+    interview = interviews.setdefault(applicant_id, create_interview())
+    if interview.get("complete"):
+        return {
+            "message": "Interview already complete",
+            "complete": True,
+            "question": None,
+            "messages": interview.get("transcript", []),
+            "answered": len(interview.get("answers", [])),
+            "total": len(FOUNDATION_QUESTIONS) + MIN_FOLLOW_UPS,
+            "ai_assisted": llm_enabled(),
+            "ai_available": llm_enabled(),
+        }
 
-    # ── LLM acknowledgement ───────────────────────────────────────────────────
+    raw_answer = (payload or {}).get("answer") or (payload or {}).get("answers") or ""
+    if not str(raw_answer).strip():
+        raise HTTPException(status_code=400, detail="Answer is required.")
+
+    interview["transcript"].append({"role": "user", "content": str(raw_answer)})
+    interview["answers"].append(str(raw_answer))
+
     try:
         ack, _ = acknowledgement(interview["transcript"])
     except LLMError as exc:
@@ -95,12 +125,8 @@ def submit_answer(data: InterviewAnswer):
 
     interview["transcript"].append({"role": "assistant", "content": ack})
 
-    # ── Advance state ─────────────────────────────────────────────────────────
-    in_foundation = interview["question_index"] < len(FOUNDATION_QUESTIONS)
-
-    if in_foundation:
+    if interview["question_index"] < len(FOUNDATION_QUESTIONS):
         interview["question_index"] += 1
-        # When foundation questions are done, generate LLM follow-ups
         if interview["question_index"] == len(FOUNDATION_QUESTIONS):
             try:
                 interview["follow_up_questions"] = generate_follow_up_questions(interview["answers"])
@@ -109,7 +135,6 @@ def submit_answer(data: InterviewAnswer):
     else:
         interview["follow_up_count"] += 1
 
-    # ── Evidence assessment once all questions are answered ───────────────────
     question = next_question(interview)
     if interview["complete"]:
         try:
@@ -119,39 +144,94 @@ def submit_answer(data: InterviewAnswer):
 
     return {
         "message": "Answer submitted",
-        "applicant_id": data.applicant_id,
-        "acknowledgement": ack,
-        "next_question": question,
-        "transcript": interview["transcript"],
+        "applicant_id": applicant_id,
         "complete": interview["complete"],
+        "question": question,
+        "messages": interview["transcript"],
+        "answered": len(interview["answers"]),
+        "total": len(FOUNDATION_QUESTIONS) + MIN_FOLLOW_UPS,
+        "ai_assisted": llm_enabled(),
+        "ai_available": llm_enabled(),
     }
 
 
-# ── selection ─────────────────────────────────────────────────────────────────
+@app.post("/interviews/answers")
+def legacy_submit_answer(data: InterviewAnswer):
+    if not data.applicant_id:
+        raise HTTPException(status_code=400, detail="applicant_id is required.")
+    payload = {"answer": data.answers or data.answer or ""}
+    return submit_answer(data.applicant_id, payload)
 
-@app.post("/selection")
+
+@app.post("/api/selection")
 def selection(data: SelectionRequest):
-    """Rank applicants and return placements.
-
-    Scores are derived only from the five boolean evidence flags set by the
-    LLM assessor. Age, residence, and all other protected attributes are
-    absent from the scoring function.
-    """
     ranked = rank_applicants(applicants, interviews, data.seats)
+    completed = [entry for entry in ranked if entry["completed_interview"]]
+    placements = []
+    waitlist = []
+    for index, entry in enumerate(completed):
+        applicant = applicants.get(entry["applicant_id"], {})
+        item = {
+            "id": entry["applicant_id"],
+            "name": applicant.get("name", entry["applicant_id"]),
+            "skill": applicant.get("skill") or applicant.get("skill_of_interest") or "",
+            "reason": entry["reason"],
+            "decision": "Guaranteed job" if index < 2 else "Training place",
+            "guaranteed_job": index < 2,
+        }
+        if index < data.seats:
+            placements.append(item)
+        else:
+            waitlist.append(item)
 
-    # Attach LLM-generated evidence summaries for completed applicants
-    for entry in ranked:
-        aid = entry["applicant_id"]
-        iv = interviews.get(aid, {})
-        if iv.get("complete") and iv.get("answers"):
-            try:
-                summary, _ = evidence_summary(iv["answers"], "")
-                entry["evidence_summary"] = summary
-            except LLMError:
-                entry["evidence_summary"] = None
+    if not completed:
+        return {
+            "assessed": 0,
+            "placements": [],
+            "waitlist": [],
+            "note": "No completed interviews are available for review yet.",
+        }
 
     return {
-        "seats": data.seats,
-        "placements": ranked[: data.seats],
-        "non_placements": ranked[data.seats :],
+        "assessed": len(completed),
+        "placements": placements[: data.seats],
+        "non_placements": [
+            {**item, "decision": "Waitlist" if item["decision"] == "Training place" else item["decision"]}
+            for item in waitlist
+        ],
+        "waitlist": waitlist,
+        "note": f"{len(completed)} completed interview(s) assessed. Evidence-only ranking was applied.",
     }
+
+
+@app.post("/selection")
+def legacy_selection(data: SelectionRequest):
+    return selection(data)
+
+
+@app.post("/api/demo")
+def demo_seed():
+    sample = [
+        {"name": "Amina", "skill": "Coding", "motivation": "I want to learn teamwork and build digital solutions.", "goal": "I want to become a junior software developer.", "age": 24, "residence": "Kano"},
+        {"name": "Kofi", "skill": "Data analysis", "motivation": "I need to interpret local business data to help my community.", "goal": "I want to become a data analyst.", "age": 27, "residence": "Accra"},
+        {"name": "Marta", "skill": "Tailoring", "motivation": "I want a stable income and practical design skills.", "goal": "I want to grow a small tailoring business.", "age": 21, "residence": "Harare"},
+    ]
+    for person in sample:
+        applicants[person["name"]] = person
+        interviews.setdefault(person["name"], create_interview())
+        interviews[person["name"]]["answers"] = [
+            "I created a small project to track sales for my local shop and used feedback to improve it.",
+            "I learned how to structure a problem and test different solutions before choosing one.",
+            "I organised a community workshop and helped others apply the same method to their own challenges.",
+            "I want to use the training to build more practical products and improve my confidence working with teams.",
+        ]
+        interviews[person["name"]]["complete"] = True
+        interviews[person["name"]]["transcript"] = [{"role": "user", "content": answer} for answer in interviews[person["name"]]["answers"]]
+        interviews[person["name"]]["evidence_flags"] = {
+            "specific_example": True,
+            "personal_action": True,
+            "outcome": True,
+            "reflection": True,
+            "plan": True,
+        }
+    return {"message": "Demo interviews loaded", "count": len(sample)}
