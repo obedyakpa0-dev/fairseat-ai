@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -19,6 +20,7 @@ except ImportError:  # The app remains runnable before the SDK is installed.
 
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 _gemini_client = None
+_llm_backoff_until = 0.0
 
 
 class LLMError(RuntimeError):
@@ -39,12 +41,32 @@ def _client() -> genai.Client:
 
 
 def _generate(instructions: str, contents: str) -> str:
-    response = _client().interactions.create(
-        model=MODEL,
-        system_instruction=instructions,
-        input=contents,
-    )
-    return response.output_text or ""
+    global _llm_backoff_until
+    if time.monotonic() < _llm_backoff_until:
+        raise LLMError("Gemini quota is temporarily unavailable; continuing with guided interview mode.")
+    try:
+        response = _client().interactions.create(
+            model=MODEL,
+            system_instruction=instructions,
+            input=contents,
+            timeout=8,
+        )
+        return response.output_text or ""
+    except Exception as error:
+        if "429" in str(error) or "quota" in str(error).lower() or "rate limit" in str(error).lower():
+            _llm_backoff_until = time.monotonic() + 60
+        raise
+
+
+def _fallback_evidence(answers: list[str]) -> dict[str, bool]:
+    text = " ".join(answers).lower()
+    return {
+        "specific_example": any(word in text for word in ("built", "created", "installed", "organised", "organized", "made")),
+        "personal_action": any(word in text for word in ("i ", "my ", "we ")),
+        "outcome": any(word in text for word in ("result", "improved", "helped", "changed", "completed")),
+        "reflection": any(word in text for word in ("learned", "realized", "realised", "would do", "next time")),
+        "plan": any(word in text for word in ("want to", "plan to", "will ", "hope to", "after training")),
+    }
 
 
 def _questions(text: str) -> list[str]:
@@ -72,9 +94,9 @@ Return only a numbered list of two questions, each ending in a question mark."""
             raise LLMError("The language model returned an invalid follow-up response. Please send the answer again.")
         return questions, True
     except LLMError:
-        raise
+        return list(fallback), False
     except Exception as error:
-        raise LLMError("The language model could not complete the follow-up. Check the API key, model access, and connection.") from error
+        return list(fallback), False
 
 
 def acknowledgement(messages: list[dict[str, str]]) -> tuple[str, bool]:
@@ -89,9 +111,9 @@ promise a job, make a placement decision, or mention protected personal informat
             raise LLMError("The language model returned an invalid chat response. Please send the answer again.")
         return text, True
     except LLMError:
-        raise
+        return "Thanks for sharing that. Let's continue with the next question.", False
     except Exception as error:
-        raise LLMError("The language model could not answer this message. Check the API key, model access, and connection.") from error
+        return "Thanks for sharing that. Let's continue with the next question.", False
 
 
 def evidence_summary(answers: list[str], fallback: str) -> tuple[str, bool]:
@@ -106,9 +128,9 @@ politics, or contacts. Focus on specific action, outcome, reflection, and partic
             raise LLMError("The language model returned an invalid review summary.")
         return text, True
     except LLMError:
-        raise
+        return fallback, False
     except Exception as error:
-        raise LLMError("The language model could not produce the review summary. Check the API key, model access, and connection.") from error
+        return fallback, False
 
 
 def evidence_assessment(answers: list[str]) -> tuple[dict[str, bool], bool]:
@@ -125,7 +147,7 @@ rank, select, reject, or recommend the applicant. Return JSON only."""
             raise LLMError("The language model returned an invalid evidence assessment.")
         return assessment, True
     except LLMError:
-        raise
+        return _fallback_evidence(answers), False
     except Exception as error:
-        raise LLMError("The language model could not assess the interview evidence. Check the API key, model access, and connection.") from error
+        return _fallback_evidence(answers), False
 

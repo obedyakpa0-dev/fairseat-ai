@@ -92,9 +92,7 @@ function showQuestion(data) {
   $("#answer-form").classList.remove("hidden");
   $("#model-status").innerHTML = data.ai_assisted
     ? "<i></i> AI interview assistant"
-    : data.ai_available
-      ? "<i></i> AI ready for next turn"
-      : "<i></i> Guided & evidence-led";
+    : "<i></i> Guided & evidence-led";
   $("#question-count").textContent =
     `${String(data.answered + 1).padStart(2, "0")} / ${String(data.total).padStart(2, "0")}`;
   const transcript = (data.messages || [])

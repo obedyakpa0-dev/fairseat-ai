@@ -90,7 +90,7 @@ def get_interview(applicant_id: str):
         "messages": interview.get("transcript", []),
         "answered": len(interview.get("answers", [])),
         "total": len(FOUNDATION_QUESTIONS) + MIN_FOLLOW_UPS,
-        "ai_assisted": llm_enabled(),
+        "ai_assisted": bool(interview.get("ai_assisted")),
         "ai_available": llm_enabled(),
     }
 
@@ -131,7 +131,8 @@ def submit_answer(applicant_id: str, payload: dict):
     interview["answers"].append(str(raw_answer))
 
     try:
-        ack, _ = acknowledgement(interview["transcript"])
+        ack, ai_assisted = acknowledgement(interview["transcript"])
+        interview["ai_assisted"] = ai_assisted
     except LLMError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
@@ -162,7 +163,7 @@ def submit_answer(applicant_id: str, payload: dict):
         "messages": interview["transcript"],
         "answered": len(interview["answers"]),
         "total": len(FOUNDATION_QUESTIONS) + MIN_FOLLOW_UPS,
-        "ai_assisted": llm_enabled(),
+        "ai_assisted": bool(interview.get("ai_assisted")),
         "ai_available": llm_enabled(),
     }
 
